@@ -6,21 +6,21 @@
 #include <string>
 using namespace std;
 
-//__global__ void dothings(int *foo, int *bar, int N) {
-//    for (int i = 0; i <= N; i++) {
-//        for (int x = 0; x <= N; x++) {
-//            if (foo[i] + foo[x] == 2020) {
-//                bar[0] = foo[i];
-//                bar[1] = foo[x];
-//                bar[2] = bar[0] * bar[1];
-//                i = N + 1;
-//                break;
-//            }
-//        }
-//    }
-//}
+__global__ void sequential(int *foo, int *bar, int N) {
+    for (int i = 0; i <= N; i++) {
+        for (int x = 0; x <= N; x++) {
+            if (foo[i] + foo[x] == 2020) {
+                bar[0] = foo[i];
+                bar[1] = foo[x];
+                bar[2] = bar[0] * bar[1];
+                i = N + 1;
+                break;
+            }
+        }
+    }
+}
 
-__global__ void stridy(int *foo, int *bar, int N) {
+__global__ void babyStride(int *foo, int *bar, int N) {
 
     int index = threadIdx.x;
     int stride = blockDim.x;
@@ -42,22 +42,21 @@ __global__ void stridy(int *foo, int *bar, int N) {
 int main() {
 
     // make some variables
-    int *inputData, *resultData;
-    // Create a text string, which is used to output the text file
-    string line;
+    int *inputData, *sequentialAttemptResults, *babyStrideAttemptResult;
 
-
+    // Get File line number to create array size.
     std::ifstream file("../input.txt");
     int N = count(istreambuf_iterator<char>(file), istreambuf_iterator<char>(), '\n') + 1;
     file.clear();
     file.seekg(0);
 
     cudaMallocManaged(&inputData, N * (sizeof(long)));
-    cudaMallocManaged(&resultData, 2 * (sizeof(long)));
+    cudaMallocManaged(&sequentialAttemptResults, 2 * (sizeof(long)));
+    cudaMallocManaged(&babyStrideAttemptResult, 2 * (sizeof(long)));
 
-
+    // Read file - populate input data array
+    string line;
     N = 0;
-    // Use a while loop together with the getline() function to read the file line by line
     while (getline(file, line)) {
         // Output the text from the file
         inputData[N] = stoi(line);
@@ -65,25 +64,31 @@ int main() {
     }
     file.close();
 
+    // GPU COMPUTE STARTS HERE:
 
-
-//    dothings<<<1, 1>>>(inputData, resultData, N);
     //             Type  Time(%)      Time     Calls       Avg       Min       Max  Name
-    //  GPU activities:  100.00%  1.4049ms         1  1.4049ms  1.4049ms  1.4049ms  dothings(int*, int*, int)
+    //  GPU activities:  100.00%  1.4049ms         1  1.4049ms  1.4049ms  1.4049ms  sequential(int*, int*, int)
+    sequential<<<1, 1>>>(inputData, sequentialAttemptResults, N);
 
-    stridy<<<1, 256>>>(inputData, resultData, N);
-    //            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
-    // GPU activities:  100.00%  20.032us         1  20.032us  20.032us  20.032us  stridy(int*, int*, int)
+    //             Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+    //  GPU activities:  100.00%  20.032us         1  20.032us  20.032us  20.032us  babyStride(int*, int*, int)
+    babyStride<<<1, 256>>>(inputData, babyStrideAttemptResult, N);
 
-
+    // Wait for GPU work to finish.
     cudaDeviceSynchronize();
 
-    printf("matching value s were %d\n", resultData[0]);
-    printf("matching values were %d\n", resultData[1]);
-    printf("Product = %d\n", resultData[2]);
+    // ANSWERS for sequential:
+    printf("matching value s were %d\n", sequentialAttemptResults[0]);
+    printf("matching values were %d\n", sequentialAttemptResults[1]);
+    printf("Product = %d\n\n", sequentialAttemptResults[2]);
 
+    // ANSWERS for a basic stride:
+    printf("matching value s were %d\n", babyStrideAttemptResult[0]);
+    printf("matching values were %d\n", babyStrideAttemptResult[1]);
+    printf("Product = %d\n\n", babyStrideAttemptResult[2]);
 
     cudaFree(inputData);
-    cudaFree(resultData);
+    cudaFree(sequentialAttemptResults);
+    cudaFree(babyStrideAttemptResult);
     return 0;
 }
