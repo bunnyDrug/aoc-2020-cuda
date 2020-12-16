@@ -4,6 +4,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <cmath>
 using namespace std;
 
 __global__ void sequential(int *foo, int *bar, int N) {
@@ -26,7 +27,7 @@ __global__ void babyStride(int *foo, int *bar, int N) {
     int stride = blockDim.x;
 
     for (int i = index ; i <= N; i+= stride) {
-        for (int x = 0; x <= N; x++) {
+        for (int x = i; x > -1; x--) {
             if (foo[i] + foo[x] == 2020) {
                 bar[0] = foo[i];
                 bar[1] = foo[x];
@@ -68,10 +69,10 @@ int main() {
 
     //             Type  Time(%)      Time     Calls       Avg       Min       Max  Name
     //  GPU activities:  100.00%  1.4049ms         1  1.4049ms  1.4049ms  1.4049ms  sequential(int*, int*, int)
-    sequential<<<1, 1>>>(inputData, sequentialAttemptResults, N);
+//    sequential<<<1, 1>>>(inputData, sequentialAttemptResults, N);
 
     //             Type  Time(%)      Time     Calls       Avg       Min       Max  Name
-    //  GPU activities:  100.00%  20.032us         1  20.032us  20.032us  20.032us  babyStride(int*, int*, int)
+    //  GPU activities:  100.00%  17.089us         1  17.089us  17.089us  17.089us  babyStride(int*, int*, int)
     babyStride<<<1, 256>>>(inputData, babyStrideAttemptResult, N);
 
     // Wait for GPU work to finish.
