@@ -4,92 +4,136 @@
 #include <iostream>
 #include <fstream>
 #include <string>
-#include <cmath>
+
+void printProduct(const int *part2ResultsBasicStride, int numberOfLines);
+
 using namespace std;
 
-__global__ void sequential(int *foo, int *bar, int N) {
+__global__ void partOneDeviceCodeSequential(int *foo, int *bar, int N) {
     for (int i = 0; i <= N; i++) {
-        for (int x = 0; x <= N; x++) {
+        for (int x = i; x > -1; x--) { // no more duplicate addition.
             if (foo[i] + foo[x] == 2020) {
-                bar[0] = foo[i];
-                bar[1] = foo[x];
-                bar[2] = bar[0] * bar[1];
-                i = N + 1;
-                break;
+                bar[0] = foo[i] * foo[x];
+                return; // break
             }
         }
     }
 }
 
-__global__ void babyStride(int *foo, int *bar, int N) {
+__global__ void part1DeviceCodeBasicStride(int *foo, int *bar, int N) {
 
     int index = threadIdx.x;
     int stride = blockDim.x;
 
     for (int i = index ; i <= N; i+= stride) {
-        for (int x = i; x > -1; x--) {
+        for (int x = i; x > -1; x--) { // no more duplicate compares.
             if (foo[i] + foo[x] == 2020) {
-                bar[0] = foo[i];
-                bar[1] = foo[x];
-                bar[2] = bar[0] * bar[1];
-                i = N + 1;
-                break;
+                bar[index] = foo[i] * foo[x];
+                return; // break
             }
         }
     }
 }
 
 
-int main() {
+__global__ void part2DeviceCodeBasicStride(int *foo, int *bar, int N) {
 
-    // make some variables
-    int *inputData, *sequentialAttemptResults, *babyStrideAttemptResult;
+    int index = threadIdx.x;
+    int stride = blockDim.x;
 
-    // Get File line number to create array size.
-    std::ifstream file("../input.txt");
-    int N = count(istreambuf_iterator<char>(file), istreambuf_iterator<char>(), '\n') + 1;
-    file.clear();
-    file.seekg(0);
-
-    cudaMallocManaged(&inputData, N * (sizeof(long)));
-    cudaMallocManaged(&sequentialAttemptResults, 2 * (sizeof(long)));
-    cudaMallocManaged(&babyStrideAttemptResult, 2 * (sizeof(long)));
-
-    // Read file - populate input data array
-    string line;
-    N = 0;
-    while (getline(file, line)) {
-        // Output the text from the file
-        inputData[N] = stoi(line);
-        N++;
+    for (int i = index ; i <= N; i+= stride) {
+        for (int x = i; x > -1; x--) { // no more duplicate compares.
+            if (foo[i] + foo[x] == 2020) {
+                bar[index] = foo[i] * foo[x];
+                return; // break
+            }
+        }
     }
-    file.close();
+}
+
+__global__ void part2DeviceCodeBasicStridePlus(int *foo, int *bar, int N) {
+
+    int index = blockIdx.x * blockDim.x + threadIdx.x;
+    int stride = blockDim.x * gridDim.x;
+
+    for (int i = index ; i <= N; i+= stride) {
+        for (int x = i; x > -1; x--) { // no more duplicate compares.
+            for (int y = x; y > -1; y--) { // no more duplicate compares.
+                    if (foo[i] + foo[x] + foo[y] == 2020) {
+                        bar[index] = foo[i] * foo[x] * foo[y];
+                        return; // break
+                    }
+            }
+        }
+    }
+}
+
+int main() {
+    int *inputData;
+    int *part1ResultsSequential;
+    int *part1ResultsBasicStride;
+    int *part2ResultsBasicStride;
+
+
+    // Get line numbers from input inputFile.
+    ifstream inputFile("../input.txt");
+    int numberOfLines = count(istreambuf_iterator<char>(inputFile), istreambuf_iterator<char>(), '\n') + 1;
+    // reset inputFile read position
+    inputFile.clear();
+    inputFile.seekg(0);
+
+    // shared memory allocation for both device and host.
+    cudaMallocManaged(&inputData, (sizeof(int))); // input data
+    cudaMallocManaged(&part1ResultsSequential, (sizeof(int))); // pt1 (sequential)
+    cudaMallocManaged(&part1ResultsBasicStride, (sizeof(int))); // pt1 (stride)
+    cudaMallocManaged(&part2ResultsBasicStride, (sizeof(int))); // pt2 (stride)
+
+    // READ FILE
+    // Add entries from inputFile as elements to array
+    string line;
+    numberOfLines = 0;
+    while (getline(inputFile, line)) {
+        // Output the text from the inputFile
+        inputData[numberOfLines] = stoi(line);
+        numberOfLines++;
+    }
+    inputFile.close();
+
 
     // GPU COMPUTE STARTS HERE:
+    partOneDeviceCodeSequential<<<1, 1>>>(inputData, part1ResultsSequential, numberOfLines);
 
-    //             Type  Time(%)      Time     Calls       Avg       Min       Max  Name
-    //  GPU activities:  100.00%  1.4049ms         1  1.4049ms  1.4049ms  1.4049ms  sequential(int*, int*, int)
-//    sequential<<<1, 1>>>(inputData, sequentialAttemptResults, N);
+    part1DeviceCodeBasicStride<<<1, 512>>>(inputData, part1ResultsBasicStride, numberOfLines);
 
-    //             Type  Time(%)      Time     Calls       Avg       Min       Max  Name
-    //  GPU activities:  100.00%  17.089us         1  17.089us  17.089us  17.089us  babyStride(int*, int*, int)
-    babyStride<<<1, 256>>>(inputData, babyStrideAttemptResult, N);
+    part2DeviceCodeBasicStridePlus<<<1, 512>>>(inputData, part2ResultsBasicStride, numberOfLines);
+
 
     // Wait for GPU work to finish.
     cudaDeviceSynchronize();
 
-    // ANSWERS for sequential:
-    printf("matching value s were %d\n", sequentialAttemptResults[0]);
-    printf("matching values were %d\n", sequentialAttemptResults[1]);
-    printf("Product = %d\n\n", sequentialAttemptResults[2]);
+    // ANSWERS -->
+    printf("Part 1 (sequential device code)\n");
+    printProduct(part1ResultsSequential, numberOfLines);
 
-    // ANSWERS for a basic stride:
-    printf("matching value s were %d\n", babyStrideAttemptResult[0]);
-    printf("matching values were %d\n", babyStrideAttemptResult[1]);
-    printf("Product = %d\n\n", babyStrideAttemptResult[2]);
+    printf("Part 1 (stride device code)\n");
+    printProduct(part1ResultsBasicStride, numberOfLines);
+
+    printf("Part 1 (stride thread safe)\n");
+    printProduct(part2ResultsBasicStride, numberOfLines);
+
 
     cudaFree(inputData);
-    cudaFree(sequentialAttemptResults);
-    cudaFree(babyStrideAttemptResult);
+    cudaFree(part1ResultsSequential);
+    cudaFree(part1ResultsBasicStride);
+    cudaFree(part2ResultsBasicStride);
     return 0;
+}
+
+void printProduct(const int *results, int N) {
+    for (int i = 0; i < N; i++) {
+        if (results[i] != 0){
+            printf("Product: %d", results[i]);
+        }
+    }
+    printf("\n\n");
 }
