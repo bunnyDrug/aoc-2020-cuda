@@ -115,10 +115,10 @@ int main() {
     printf("Part 1 (sequential device code)\n");
     printProduct(part1ResultsSequential, numberOfLines);
 
-    printf("Part 1 (stride device code)\n");
+    printf("Part 1 (stride device code, thread safe)\n");
     printProduct(part1ResultsBasicStride, numberOfLines);
 
-    printf("Part 1 (stride thread safe)\n");
+    printf("Part 2 (stride device code, thread safe)\n");
     printProduct(part2ResultsBasicStride, numberOfLines);
 
 
